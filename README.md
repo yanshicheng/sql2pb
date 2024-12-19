@@ -55,6 +55,11 @@ $ sql2pb -go_package ./pb -host localhost -package pb -password root -port 3306 
 
 ```sh
 $ go get -u github.com/yanshicheng/sql2pb@latest
+
+git tag -d latest  
+git tag  latest   
+git push origin :refs/tags/latest  
+git push origin latest
 ```
 
 
