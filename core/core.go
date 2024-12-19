@@ -720,12 +720,12 @@ func parseColumn(s *Schema, msg *Message, col Column) error {
 		fieldType = "bool"
 	case "tinyint", "smallint", "int", "mediumint", "bigint":
 		// 在这里增加 tinyint(1) 对应 bool 的处理逻辑
-		if typ == "tinyint" && strings.Contains(col.ColumnType, "(1)") {
-			// MySQL中 tinyint(1) 通常用来表示布尔值
-			fieldType = "bool"
-		} else {
-			fieldType = "int64"
-		}
+		fieldType = "int64"
+		//if typ == "tinyint" && strings.Contains(col.ColumnType, "(1)") {
+		//	fieldType = "bool"
+		//} else {
+		//	fieldType = "int64"
+		//}
 	case "float", "decimal", "double":
 		fieldType = "double"
 	case "json":
