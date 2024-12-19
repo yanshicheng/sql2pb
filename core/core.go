@@ -719,13 +719,22 @@ func parseColumn(s *Schema, msg *Message, col Column) error {
 	case "bool", "bit":
 		fieldType = "bool"
 	case "tinyint", "smallint", "int", "mediumint", "bigint":
-		fieldType = "int64"
+		// 在这里增加 tinyint(1) 对应 bool 的处理逻辑
+		if typ == "tinyint" && strings.Contains(col.ColumnType, "(1)") {
+			// MySQL中 tinyint(1) 通常用来表示布尔值
+			fieldType = "bool"
+		} else {
+			fieldType = "int64"
+		}
 	case "float", "decimal", "double":
 		fieldType = "double"
 	case "json":
 		fieldType = "string"
 	}
-
+	// 在这里增加对 id 字段的特殊处理，将其强制为 uint64
+	if col.ColumnName == "id" {
+		fieldType = "uint64"
+	}
 	if "" == fieldType {
 		return fmt.Errorf("no compatible protobuf type found for `%s`. column: `%s`.`%s`", col.DataType, col.TableName, col.ColumnName)
 	}
