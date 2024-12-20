@@ -548,7 +548,8 @@ func (m Message) GenRpcGetByIdReqMessage(buf *bytes.Buffer) {
 		comment = stringx.From(firstWord + mOrginName[1:]).ToSnake()
 	}
 	m.Fields = []MessageField{
-		{Typ: mOrginName, Name: "data", tag: 1, Comment: comment},
+		//{Typ: mOrginName, Name: "data", tag: 1, Comment: comment},
+		{Typ: m.Name, Name: "data", tag: 1, Comment: comment},
 	}
 	buf.WriteString(fmt.Sprintf("%s\n", m))
 
@@ -696,7 +697,8 @@ func parseColumn(s *Schema, msg *Message, col Column) error {
 		fieldType = "string"
 	case "enum", "set":
 		// Parse c.ColumnType to get the enum list
-		enumList := regexp.MustCompile(`[enum|set]\((.+?)\)`).FindStringSubmatch(col.ColumnType)
+		//enumList := regexp.MustCompile(`[enum|set]\((.+?)\)`).FindStringSubmatch(col.ColumnType)
+		enumList := regexp.MustCompile(`([enum|set])\((.+?)\)`).FindStringSubmatch(col.ColumnType)
 		enums := strings.FieldsFunc(enumList[1], func(c rune) bool {
 			cs := string(c)
 			return "," == cs || "'" == cs
@@ -721,6 +723,15 @@ func parseColumn(s *Schema, msg *Message, col Column) error {
 	case "tinyint", "smallint", "int", "mediumint", "bigint":
 		// 在这里增加 tinyint(1) 对应 bool 的处理逻辑
 		fieldType = "int64"
+		// 检查是否为 BIGINT UNSIGNED
+		if typ == "bigint" && strings.Contains(strings.ToLower(col.ColumnType), "unsigned") {
+			fieldType = "uint64" // 修改点1：BIGINT UNSIGNED 映射为 uint64
+		} else if typ == "tinyint" && strings.Contains(strings.ToLower(col.ColumnType), "(1)") {
+			// 如果是 tinyint(1)，并且类型为 bit 或 bool
+			fieldType = "bool"
+		} else {
+			fieldType = "int64"
+		}
 		//if typ == "tinyint" && strings.Contains(col.ColumnType, "(1)") {
 		//	fieldType = "bool"
 		//} else {
@@ -732,8 +743,8 @@ func parseColumn(s *Schema, msg *Message, col Column) error {
 		fieldType = "string"
 	}
 	// 在这里增加对 id 字段的特殊处理，将其强制为 uint64
-	if col.ColumnName == "id" {
-		fieldType = "uint64"
+	if strings.ToLower(col.ColumnName) == "id" {
+		fieldType = "uint64" // 修改点2：将 id 字段强制为 uint64
 	}
 	if "" == fieldType {
 		return fmt.Errorf("no compatible protobuf type found for `%s`. column: `%s`.`%s`", col.DataType, col.TableName, col.ColumnName)
