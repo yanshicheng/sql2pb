@@ -32,6 +32,7 @@ var (
 	defaultIgnoreFields = []string{"del_state", "delete_time", "delete_at", "deleted_at"}
 	updateIgnoreFields  = []string{"create_time", "create_at", "update_time", "update_at", "del_state", "delete_at", "delete_time", "deleteAt", "updateAt", "createAt", "deleted_at", "created_at", "updated_at"}
 	addReqIgnoreFields  = []string{"id", "create_time", "create_at", "update_at", "update_time", "del_state", "delete_at", "delete_time", "deleteAt", "updateAt", "createAt", "deleted_at", "created_at", "updated_at"}
+	searchIgnoreFields  = []string{"id", "create_time", "create_at", "update_time", "update_at", "del_state", "delete_at", "delete_time", "deleteAt", "updateAt", "createAt", "deleted_at", "created_at", "updated_at"}
 )
 
 // GenerateSchema generates a protobuf schema from a database connection and a package name.
@@ -477,7 +478,6 @@ func (m Message) GenRpcUpdateReqMessage(buf *bytes.Buffer) {
 	m.Fields = mOrginFields
 
 	//resp
-	//resp
 	//firstWord := strings.ToLower(string(m.Name[0]))
 	//name := stringx.From(firstWord + mOrginName[1:]).ToCamelWithStartLower()
 	//comment := stringx.From(firstWord + mOrginName[1:]).ToCamelWithStartLower()
@@ -571,7 +571,7 @@ func (m Message) GenRpcSearchReqMessage(buf *bytes.Buffer) {
 	}
 	var filedTag = len(curFields)
 	for _, field := range m.Fields {
-		if isInSlice(updateIgnoreFields, field.Name) {
+		if isInSlice(searchIgnoreFields, field.Name) {
 			continue
 		}
 		filedTag++
