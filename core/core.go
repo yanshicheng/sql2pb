@@ -504,7 +504,7 @@ func (m Message) GenRpcDelReqMessage(buf *bytes.Buffer) {
 
 	m.Name = "Del" + mOrginName + "Req"
 	m.Fields = []MessageField{
-		{Name: "id", Typ: "int64", tag: 1, Comment: "id"},
+		{Name: "id", Typ: "uint64", tag: 1, Comment: "id"},
 	}
 	buf.WriteString(fmt.Sprintf("%s\n", m))
 
@@ -529,7 +529,7 @@ func (m Message) GenRpcGetByIdReqMessage(buf *bytes.Buffer) {
 
 	m.Name = "Get" + mOrginName + "ByIdReq"
 	m.Fields = []MessageField{
-		{Name: "id", Typ: "int64", tag: 1, Comment: "id"},
+		{Name: "id", Typ: "uint64", tag: 1, Comment: "id"},
 	}
 	buf.WriteString(fmt.Sprintf("%s\n", m))
 
@@ -565,8 +565,8 @@ func (m Message) GenRpcSearchReqMessage(buf *bytes.Buffer) {
 
 	m.Name = "Search" + mOrginName + "Req"
 	curFields := []MessageField{
-		{Typ: "int64", Name: "page", tag: 1, Comment: "page"},
-		{Typ: "int64", Name: "pageSize", tag: 2, Comment: "pageSize"},
+		{Typ: "uint64", Name: "page", tag: 1, Comment: "page"},
+		{Typ: "uint64", Name: "pageSize", tag: 2, Comment: "pageSize"},
 		{Typ: "string", Name: "orderStr", tag: 3, Comment: "orderStr"},
 		{Typ: "bool", Name: "isAsc", tag: 4, Comment: "isAsc"},
 	}
@@ -607,7 +607,7 @@ func (m Message) GenRpcSearchReqMessage(buf *bytes.Buffer) {
 
 	m.Fields = []MessageField{
 		{Typ: "repeated " + mOrginName, Name: "data", tag: 1, Comment: comment},
-		{Typ: "int64", Name: "total", tag: 2, Comment: "total"},
+		{Typ: "uint64", Name: "total", tag: 2, Comment: "total"},
 	}
 	buf.WriteString(fmt.Sprintf("%s\n", m))
 
