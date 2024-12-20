@@ -30,7 +30,7 @@ const (
 var (
 	allIgnoreFields     = []string{"del_state", "delete_at", "delete_time"}
 	defaultIgnoreFields = []string{"del_state", "delete_time", "delete_at", "deleted_at"}
-	updateIgnoreFields  = []string{"create_time", "create_at", "update_time", "update_at", "del_state", "delete_at", "delete_time", "deleteAt", "updateAt", "createAt", "deleted_at", "created_at", "updated_at"}
+	updateIgnoreFields  = []string{"create_time", "createBy", "create_by", "create_at", "update_time", "update_at", "del_state", "delete_at", "delete_time", "deleteAt", "updateAt", "createAt", "deleted_at", "created_at", "updated_at"}
 	addReqIgnoreFields  = []string{"id", "create_time", "create_at", "update_at", "update_time", "del_state", "delete_at", "delete_time", "deleteAt", "updateAt", "createAt", "deleted_at", "created_at", "updated_at"}
 	searchIgnoreFields  = []string{"id", "create_time", "create_at", "update_time", "update_at", "del_state", "delete_at", "delete_time", "deleteAt", "updateAt", "createAt", "deleted_at", "created_at", "updated_at"}
 )
