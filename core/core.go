@@ -548,8 +548,8 @@ func (m Message) GenRpcGetByIdReqMessage(buf *bytes.Buffer) {
 		comment = stringx.From(firstWord + mOrginName[1:]).ToSnake()
 	}
 	m.Fields = []MessageField{
-		//{Typ: mOrginName, Name: "data", tag: 1, Comment: comment},
-		{Typ: m.Name, Name: "data", tag: 1, Comment: comment},
+		{Typ: mOrginName, Name: "data", tag: 1, Comment: comment},
+		//{Typ: m.Name, Name: "data", tag: 1, Comment: comment},
 	}
 	buf.WriteString(fmt.Sprintf("%s\n", m))
 
