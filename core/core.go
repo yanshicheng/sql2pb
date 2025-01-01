@@ -719,7 +719,8 @@ func parseColumn(s *Schema, msg *Message, col Column) error {
 		//s.AppendImport("google/protobuf/timestamp.proto")
 		fieldType = "int64"
 	case "bool", "bit":
-		fieldType = "bool"
+		//fieldType = "bool"
+		fieldType = "int64" // TODO: bool 类型用 int64 暂时表示
 	case "tinyint", "smallint", "int", "mediumint", "bigint":
 		// 在这里增加 tinyint(1) 对应 bool 的处理逻辑
 		fieldType = "int64"
@@ -728,7 +729,8 @@ func parseColumn(s *Schema, msg *Message, col Column) error {
 			fieldType = "uint64" // 修改点1：BIGINT UNSIGNED 映射为 uint64
 		} else if typ == "tinyint" && strings.Contains(strings.ToLower(col.ColumnType), "(1)") {
 			// 如果是 tinyint(1)，并且类型为 bit 或 bool
-			fieldType = "bool"
+			//fieldType = "bool"
+			fieldType = "int64" // TODO: bool 类型用 int64 暂时表示
 		} else {
 			fieldType = "int64"
 		}
