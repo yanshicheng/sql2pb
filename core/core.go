@@ -129,7 +129,7 @@ func dbSchema(db *sql.DB) (string, error) {
 }
 
 func dbColumns(db *sql.DB, schema, table string) ([]Column, error) {
-
+	//  sssss
 	tableArr := strings.Split(table, ",")
 
 	q := "SELECT c.TABLE_NAME, c.COLUMN_NAME, c.IS_NULLABLE, c.DATA_TYPE, " +
