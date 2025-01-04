@@ -697,8 +697,8 @@ func parseColumn(s *Schema, msg *Message, col Column) error {
 		fieldType = "string"
 	case "enum", "set":
 		// Parse c.ColumnType to get the enum list
-		//enumList := regexp.MustCompile(`[enum|set]\((.+?)\)`).FindStringSubmatch(col.ColumnType)
-		enumList := regexp.MustCompile(`([enum|set])\((.+?)\)`).FindStringSubmatch(col.ColumnType)
+		enumList := regexp.MustCompile(`[enum|set]\((.+?)\)`).FindStringSubmatch(col.ColumnType)
+		//enumList := regexp.MustCompile(`([enum|set])\((.+?)\)`).FindStringSubmatch(col.ColumnType)
 		enums := strings.FieldsFunc(enumList[1], func(c rune) bool {
 			cs := string(c)
 			return "," == cs || "'" == cs
