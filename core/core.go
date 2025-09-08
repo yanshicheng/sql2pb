@@ -129,7 +129,7 @@ func dbSchema(db *sql.DB) (string, error) {
 }
 
 func dbColumns(db *sql.DB, schema, table string) ([]Column, error) {
-	//  sssss
+	//  sssss.
 	tableArr := strings.Split(table, ",")
 
 	q := "SELECT c.TABLE_NAME, c.COLUMN_NAME, c.IS_NULLABLE, c.DATA_TYPE, " +
@@ -257,11 +257,11 @@ func (s *Schema) String() string {
 		// 输出每个表对应的 Service 定义
 		buf.WriteString("service " + m.Name + "Service {\n")
 		buf.WriteString("\t//-----------------------" + m.Comment + "----------------------- \n")
-		buf.WriteString("\t rpc Add" + m.Name + "(Add" + m.Name + "Req) returns (Add" + m.Name + "Resp);\n")
-		buf.WriteString("\t rpc Update" + m.Name + "(Update" + m.Name + "Req) returns (Update" + m.Name + "Resp);\n")
-		buf.WriteString("\t rpc Del" + m.Name + "(Del" + m.Name + "Req) returns (Del" + m.Name + "Resp);\n")
-		buf.WriteString("\t rpc Get" + m.Name + "ById(Get" + m.Name + "ByIdReq) returns (Get" + m.Name + "ByIdResp);\n")
-		buf.WriteString("\t rpc Search" + m.Name + "(Search" + m.Name + "Req) returns (Search" + m.Name + "Resp);\n")
+		buf.WriteString("\t rpc " + m.Name + "Add" + "(Add" + m.Name + "Req) returns (Add" + m.Name + "Resp);\n")
+		buf.WriteString("\t rpc " + m.Name + "Update" + "(Update" + m.Name + "Req) returns (Update" + m.Name + "Resp);\n")
+		buf.WriteString("\t rpc " + m.Name + "Del" + "(Del" + m.Name + "Req) returns (Del" + m.Name + "Resp);\n")
+		buf.WriteString("\t rpc " + m.Name + "Get" + "ById(Get" + m.Name + "ByIdReq) returns (Get" + m.Name + "ByIdResp);\n")
+		buf.WriteString("\t rpc " + m.Name + "Search" + "(Search" + m.Name + "Req) returns (Search" + m.Name + "Resp);\n")
 		buf.WriteString("}\n\n")
 	}
 
