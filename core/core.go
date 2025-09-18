@@ -28,11 +28,11 @@ const (
 )
 
 var (
-	allIgnoreFields     = []string{"del_state", "delete_at", "delete_time"}
+	allIgnoreFields     = []string{"del_state", "delete_at", "delete_time", "deleted_at"}
 	defaultIgnoreFields = []string{"del_state", "delete_time", "delete_at", "deleted_at"}
 	updateIgnoreFields  = []string{"create_time", "createBy", "create_by", "create_at", "update_time", "update_at", "del_state", "delete_at", "delete_time", "deleteAt", "updateAt", "createAt", "deleted_at", "created_at", "updated_at"}
 	addReqIgnoreFields  = []string{"id", "create_time", "create_at", "update_at", "update_time", "del_state", "delete_at", "delete_time", "deleteAt", "updateAt", "createAt", "deleted_at", "created_at", "updated_at"}
-	searchIgnoreFields  = []string{"id", "create_time", "create_at", "update_time", "update_at", "del_state", "delete_at", "delete_time", "deleteAt", "updateAt", "createAt", "deleted_at", "created_at", "updated_at"}
+	searchIgnoreFields  = []string{"id", "create_time", "create_at", "update_time", "update_at", "del_state", "delete_at", "delete_time", "deleteAt", "updateAt", "createAt", "deleted_at", "created_at", "updated_at", "created_by", "create_by"}
 )
 
 // GenerateSchema generates a protobuf schema from a database connection and a package name.
@@ -567,7 +567,7 @@ func (m Message) GenRpcSearchReqMessage(buf *bytes.Buffer) {
 	curFields := []MessageField{
 		{Typ: "uint64", Name: "page", tag: 1, Comment: "page"},
 		{Typ: "uint64", Name: "pageSize", tag: 2, Comment: "pageSize"},
-		{Typ: "string", Name: "orderStr", tag: 3, Comment: "orderStr"},
+		{Typ: "string", Name: "OrderField", tag: 3, Comment: "OrderField"},
 		{Typ: "bool", Name: "isAsc", tag: 4, Comment: "isAsc"},
 	}
 	var filedTag = len(curFields)
