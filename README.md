@@ -10,7 +10,7 @@ Generates a protobuf file from your mysql database.
 
 #### Use from the command line:
 
-`go install github.com/yanshicheng/sql2pb@latest`
+`go install github.com/yanshicheng/sql2pb/v2@latest`
 
 ```
 ❯ sql2pb -h
@@ -54,14 +54,14 @@ $ sql2pb -go_package ./pb -host localhost -package pb -password root -port 3306 
 #### Use as an imported library
 
 ```sh
-$ go get -u github.com/yanshicheng/sql2pb@latest
+$ go get -u go install github.com/yanshicheng/sql2pb/v2@latest
 
 git tag -d latest  
 git tag  latest   
 git push origin :refs/tags/latest  
 git push origin latest
-git tag v1.8.9
-git push origin v1.8.9
+git tag v2.1.1
+git push origin v2.1.1
 ```
 
 
