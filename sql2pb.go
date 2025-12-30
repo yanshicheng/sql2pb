@@ -4,10 +4,11 @@ import (
 	"database/sql"
 	"flag"
 	"fmt"
-	"github.com/yanshicheng/sql2pb/core"
 	"log"
 	"os"
 	"strings"
+
+	"github.com/yanshicheng/sql2pb/v2/core"
 
 	_ "github.com/go-sql-driver/mysql"
 )

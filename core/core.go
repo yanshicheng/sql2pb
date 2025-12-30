@@ -10,7 +10,7 @@ import (
 
 	"github.com/chuckpreslar/inflect"
 	"github.com/serenize/snaker"
-	"github.com/yanshicheng/sql2pb/tools/stringx"
+	"github.com/yanshicheng/sql2pb/v2/tools/stringx"
 )
 
 const (
