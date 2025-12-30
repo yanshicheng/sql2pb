@@ -4,70 +4,88 @@ import (
 	"bytes"
 	"database/sql"
 	"fmt"
-	"github.com/yanshicheng/sql2pb/tools/stringx"
-	"log"
 	"regexp"
 	"sort"
 	"strings"
 
 	"github.com/chuckpreslar/inflect"
 	"github.com/serenize/snaker"
+	"github.com/yanshicheng/sql2pb/tools/stringx"
 )
 
 const (
-	// proto3 is a describing the proto3 syntax type.
+	// proto3 语法类型
 	proto3 = "proto3"
 
-	// indent represents the indentation amount for fields. the style guide suggests
-	// two spaces
+	// indent 字段缩进，protobuf 风格建议两个空格
 	indent = "  "
 
-	// gen protobuf field style
+	// 生成 protobuf 字段风格
 	fieldStyleToCamelWithStartLower = "sqlPb"
 	fieldStyleToSnake               = "sql_pb"
 )
 
+// 忽略字段配置
 var (
-	allIgnoreFields     = []string{"del_state", "delete_at", "delete_time", "deleted_at"}
-	defaultIgnoreFields = []string{"del_state", "delete_time", "delete_at", "deleted_at"}
-	updateIgnoreFields  = []string{"create_time", "createBy", "create_by", "create_at", "update_time", "update_at", "del_state", "delete_at", "delete_time", "deleteAt", "updateAt", "createAt", "deleted_at", "created_at", "updated_at"}
-	addReqIgnoreFields  = []string{"id", "create_time", "create_at", "update_at", "update_time", "del_state", "delete_at", "delete_time", "deleteAt", "updateAt", "createAt", "deleted_at", "created_at", "updated_at"}
-	searchIgnoreFields  = []string{"id", "create_time", "create_at", "update_time", "update_at", "del_state", "delete_at", "delete_time", "deleteAt", "updateAt", "createAt", "deleted_at", "created_at", "updated_at", "created_by", "create_by"}
+	allIgnoreFields     = []string{"del_state", "delete_at", "delete_time", "deleted_at", "is_deleted"}
+	defaultIgnoreFields = []string{"del_state", "delete_time", "delete_at", "deleted_at", "is_deleted"}
+	updateIgnoreFields  = []string{"create_time", "createBy", "create_by", "create_at", "update_time", "update_at", "del_state", "delete_at", "delete_time", "deleteAt", "updateAt", "createAt", "deleted_at", "created_at", "updated_at", "is_deleted", "created_by"}
+	addReqIgnoreFields  = []string{"id", "create_time", "create_at", "update_at", "update_time", "del_state", "delete_at", "delete_time", "deleteAt", "updateAt", "createAt", "deleted_at", "created_at", "updated_at", "is_deleted", "updated_by"}
+	searchIgnoreFields  = []string{"id", "create_time", "create_at", "update_time", "update_at", "del_state", "delete_at", "delete_time", "deleteAt", "updateAt", "createAt", "deleted_at", "created_at", "updated_at", "created_by", "create_by", "is_deleted"}
 )
 
-// GenerateSchema generates a protobuf schema from a database connection and a package name.
-// A list of tables to ignore may also be supplied.
-// The returned schema implements the `fmt.Stringer` interface, in order to generate a string
-// representation of a protobuf schema.
-// Do not rely on the structure of the Generated schema to provide any context about
-// the protobuf types. The schema reflects the layout of a protobuf file and should be used
-// to pipe the output of the `Schema.String()` to a file.
+// 忽略字段 map，用于快速查找
+var (
+	defaultIgnoreFieldsMap = toSet(defaultIgnoreFields)
+	updateIgnoreFieldsMap  = toSet(updateIgnoreFields)
+	addReqIgnoreFieldsMap  = toSet(addReqIgnoreFields)
+	searchIgnoreFieldsMap  = toSet(searchIgnoreFields)
+)
+
+// toSet 将 slice 转换为 map，用于 O(1) 查找
+func toSet(slice []string) map[string]struct{} {
+	m := make(map[string]struct{}, len(slice))
+	for _, s := range slice {
+		m[s] = struct{}{}
+	}
+	return m
+}
+
+// isIgnored 检查字段是否在忽略列表中
+func isIgnored(set map[string]struct{}, s string) bool {
+	_, ok := set[s]
+	return ok
+}
+
+// GenerateSchema 从数据库连接生成 protobuf schema
+// 可以指定要忽略的表和列
+// 返回的 schema 实现了 fmt.Stringer 接口，用于生成 protobuf 文件的字符串表示
 func GenerateSchema(db *sql.DB, table string, ignoreTables, ignoreColumns []string, serviceName, goPkg, pkg, fieldStyle string) (*Schema, error) {
 	s := &Schema{}
 
 	dbs, err := dbSchema(db)
-	if nil != err {
+	if err != nil {
 		return nil, err
 	}
 
 	s.Syntax = proto3
 	s.ServiceName = serviceName
-	if "" != pkg {
+	if pkg != "" {
 		s.Package = pkg
 	}
-	if "" != goPkg {
+	if goPkg != "" {
 		s.GoPackage = goPkg
 	} else {
 		s.GoPackage = "./" + s.Package
 	}
 
 	cols, err := dbColumns(db, dbs, table)
-	if nil != err {
+	if err != nil {
 		return nil, err
 	}
 
 	err = typesFromColumns(s, cols, ignoreTables, ignoreColumns, fieldStyle)
-	if nil != err {
+	if err != nil {
 		return nil, err
 	}
 
@@ -78,7 +96,7 @@ func GenerateSchema(db *sql.DB, table string, ignoreTables, ignoreColumns []stri
 	return s, nil
 }
 
-// typesFromColumns creates the appropriate schema properties from a collection of column types.
+// typesFromColumns 从列集合创建 schema 属性
 func typesFromColumns(s *Schema, cols []Column, ignoreTables, ignoreColumns []string, fieldStyle string) error {
 	messageMap := map[string]*Message{}
 	ignoreMap := map[string]bool{}
@@ -99,7 +117,6 @@ func typesFromColumns(s *Schema, cols []Column, ignoreTables, ignoreColumns []st
 		}
 
 		messageName := snaker.SnakeToCamel(c.TableName)
-		//messageName = inflect.Singularize(messageName)
 
 		msg, ok := messageMap[messageName]
 		if !ok {
@@ -108,7 +125,7 @@ func typesFromColumns(s *Schema, cols []Column, ignoreTables, ignoreColumns []st
 		}
 
 		err := parseColumn(s, msg, c)
-		if nil != err {
+		if err != nil {
 			return err
 		}
 	}
@@ -122,14 +139,11 @@ func typesFromColumns(s *Schema, cols []Column, ignoreTables, ignoreColumns []st
 
 func dbSchema(db *sql.DB) (string, error) {
 	var schema string
-
 	err := db.QueryRow("SELECT SCHEMA()").Scan(&schema)
-
 	return schema, err
 }
 
 func dbColumns(db *sql.DB, schema, table string) ([]Column, error) {
-	//  sssss.
 	tableArr := strings.Split(table, ",")
 
 	q := "SELECT c.TABLE_NAME, c.COLUMN_NAME, c.IS_NULLABLE, c.DATA_TYPE, " +
@@ -137,17 +151,25 @@ func dbColumns(db *sql.DB, schema, table string) ([]Column, error) {
 		"FROM INFORMATION_SCHEMA.COLUMNS as c  LEFT JOIN  INFORMATION_SCHEMA.TABLES as t  on c.TABLE_NAME = t.TABLE_NAME and  c.TABLE_SCHEMA = t.TABLE_SCHEMA" +
 		" WHERE c.TABLE_SCHEMA = ?"
 
+	args := []interface{}{schema}
+
+	// 使用参数化查询，防止 SQL 注入
 	if table != "" && table != "*" {
-		q += " AND c.TABLE_NAME IN('" + strings.TrimRight(strings.Join(tableArr, "' ,'"), ",") + "')"
+		placeholders := make([]string, len(tableArr))
+		for i, t := range tableArr {
+			placeholders[i] = "?"
+			args = append(args, strings.TrimSpace(t))
+		}
+		q += " AND c.TABLE_NAME IN(" + strings.Join(placeholders, ",") + ")"
 	}
 
 	q += " ORDER BY c.TABLE_NAME, c.ORDINAL_POSITION"
 
-	rows, err := db.Query(q, schema)
-	defer rows.Close()
-	if nil != err {
+	rows, err := db.Query(q, args...)
+	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 
 	cols := []Column{}
 
@@ -156,7 +178,7 @@ func dbColumns(db *sql.DB, schema, table string) ([]Column, error) {
 		err := rows.Scan(&cs.TableName, &cs.ColumnName, &cs.IsNullable, &cs.DataType,
 			&cs.CharacterMaximumLength, &cs.NumericPrecision, &cs.NumericScale, &cs.ColumnType, &cs.ColumnComment, &cs.TableComment)
 		if err != nil {
-			log.Fatal(err)
+			return nil, fmt.Errorf("scan column failed: %w", err)
 		}
 
 		if cs.TableComment == "" {
@@ -165,14 +187,14 @@ func dbColumns(db *sql.DB, schema, table string) ([]Column, error) {
 
 		cols = append(cols, cs)
 	}
-	if err := rows.Err(); nil != err {
+	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 
 	return cols, nil
 }
 
-// Schema is a representation of a protobuf schema.
+// Schema protobuf schema 结构
 type Schema struct {
 	Syntax      string
 	ServiceName string
@@ -183,7 +205,7 @@ type Schema struct {
 	Enums       EnumCollection
 }
 
-// MessageCollection represents a sortable collection of messages.
+// MessageCollection 可排序的 Message 集合
 type MessageCollection []*Message
 
 func (mc MessageCollection) Len() int {
@@ -198,7 +220,7 @@ func (mc MessageCollection) Swap(i, j int) {
 	mc[i], mc[j] = mc[j], mc[i]
 }
 
-// EnumCollection represents a sortable collection of enums.
+// EnumCollection 可排序的 Enum 集合
 type EnumCollection []*Enum
 
 func (ec EnumCollection) Len() int {
@@ -213,7 +235,7 @@ func (ec EnumCollection) Swap(i, j int) {
 	ec[i], ec[j] = ec[j], ec[i]
 }
 
-// AppendImport adds an import to a schema if the specific import does not already exist in the schema.
+// AppendImport 添加 import，如果已存在则跳过
 func (s *Schema) AppendImport(imports string) {
 	shouldAdd := true
 	for _, si := range s.Imports {
@@ -226,10 +248,9 @@ func (s *Schema) AppendImport(imports string) {
 	if shouldAdd {
 		s.Imports = append(s.Imports, imports)
 	}
-
 }
 
-// String returns a string representation of a Schema.
+// String 返回 Schema 的字符串表示
 func (s *Schema) String() string {
 	buf := new(bytes.Buffer)
 	buf.WriteString(fmt.Sprintf("syntax = \"%s\";\n", s.Syntax))
@@ -244,7 +265,6 @@ func (s *Schema) String() string {
 	buf.WriteString("// ------------------------------------ \n\n")
 
 	for _, m := range s.Messages {
-		// 输出每个表的 Message 定义
 		buf.WriteString("//--------------------------------" + m.Comment + "--------------------------------")
 		buf.WriteString("\n")
 		m.GenDefaultMessage(buf)
@@ -254,18 +274,16 @@ func (s *Schema) String() string {
 		m.GenRpcGetByIdReqMessage(buf)
 		m.GenRpcSearchReqMessage(buf)
 
-		// 输出每个表对应的 Service 定义
 		buf.WriteString("service " + m.Name + "Service {\n")
 		buf.WriteString("\t//-----------------------" + m.Comment + "----------------------- \n")
-		buf.WriteString("\t rpc " + m.Name + "Add" + "(Add" + m.Name + "Req) returns (Add" + m.Name + "Resp);\n")
-		buf.WriteString("\t rpc " + m.Name + "Update" + "(Update" + m.Name + "Req) returns (Update" + m.Name + "Resp);\n")
-		buf.WriteString("\t rpc " + m.Name + "Del" + "(Del" + m.Name + "Req) returns (Del" + m.Name + "Resp);\n")
-		buf.WriteString("\t rpc " + m.Name + "Get" + "ById(Get" + m.Name + "ByIdReq) returns (Get" + m.Name + "ByIdResp);\n")
-		buf.WriteString("\t rpc " + m.Name + "Search" + "(Search" + m.Name + "Req) returns (Search" + m.Name + "Resp);\n")
+		buf.WriteString("\t rpc " + m.Name + "Add" + "(" + m.Name + "AddReq) returns (" + m.Name + "AddResp);\n")
+		buf.WriteString("\t rpc " + m.Name + "Update" + "(" + m.Name + "UpdateReq) returns (" + m.Name + "UpdateResp);\n")
+		buf.WriteString("\t rpc " + m.Name + "Del" + "(" + m.Name + "DelReq) returns (" + m.Name + "DelResp);\n")
+		buf.WriteString("\t rpc " + m.Name + "GetById(" + m.Name + "GetByIdReq) returns (" + m.Name + "GetByIdResp);\n")
+		buf.WriteString("\t rpc " + m.Name + "Search" + "(" + m.Name + "SearchReq) returns (" + m.Name + "SearchResp);\n")
 		buf.WriteString("}\n\n")
 	}
 
-	// 如果有 Enums，可以继续输出
 	if len(s.Enums) > 0 {
 		buf.WriteString("// ------------------------------------ \n")
 		buf.WriteString("// Enums\n")
@@ -279,14 +297,14 @@ func (s *Schema) String() string {
 	return buf.String()
 }
 
-// Enum represents a protocol buffer enumerated type.
+// Enum protobuf 枚举类型
 type Enum struct {
 	Name    string
 	Comment string
 	Fields  []EnumField
 }
 
-// String returns a string representation of an Enum.
+// String 返回 Enum 的字符串表示
 func (e *Enum) String() string {
 	buf := new(bytes.Buffer)
 
@@ -302,7 +320,7 @@ func (e *Enum) String() string {
 	return buf.String()
 }
 
-// AppendField appends an EnumField to an Enum.
+// AppendField 添加枚举字段，如果 tag 已存在则返回错误
 func (e *Enum) AppendField(ef EnumField) error {
 	for _, f := range e.Fields {
 		if f.Tag() == ef.Tag() {
@@ -315,13 +333,13 @@ func (e *Enum) AppendField(ef EnumField) error {
 	return nil
 }
 
-// EnumField represents a field in an enumerated type.
+// EnumField 枚举字段
 type EnumField struct {
 	name string
 	tag  int
 }
 
-// NewEnumField constructs an EnumField type.
+// NewEnumField 创建枚举字段
 func NewEnumField(name string, tag int) EnumField {
 	name = strings.ToUpper(name)
 
@@ -331,22 +349,22 @@ func NewEnumField(name string, tag int) EnumField {
 	return EnumField{name, tag}
 }
 
-// String returns a string representation of an Enum.
+// String 返回 EnumField 的字符串表示
 func (ef EnumField) String() string {
 	return fmt.Sprintf("%s = %d", ef.name, ef.tag)
 }
 
-// Name returns the name of the enum field.
+// Name 返回枚举字段名
 func (ef EnumField) Name() string {
 	return ef.name
 }
 
-// Tag returns the identifier tag of the enum field.
+// Tag 返回枚举字段的 tag
 func (ef EnumField) Tag() int {
 	return ef.tag
 }
 
-// newEnumFromStrings creates an enum from a name and a slice of strings that represent the names of each field.
+// newEnumFromStrings 从字符串切片创建枚举
 func newEnumFromStrings(name, comment string, ss []string) (*Enum, error) {
 	enum := &Enum{}
 	enum.Name = name
@@ -354,7 +372,7 @@ func newEnumFromStrings(name, comment string, ss []string) (*Enum, error) {
 
 	for i, s := range ss {
 		err := enum.AppendField(NewEnumField(s, i))
-		if nil != err {
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -362,11 +380,10 @@ func newEnumFromStrings(name, comment string, ss []string) (*Enum, error) {
 	return enum, nil
 }
 
-// Service represents a protocol buffer service.
-// TODO: Implement this in a schema.
+// Service protobuf service
 type Service struct{}
 
-// Message represents a protocol buffer message.
+// Message protobuf message
 type Message struct {
 	Name    string
 	Comment string
@@ -374,249 +391,199 @@ type Message struct {
 	Style   string
 }
 
-// GenDefaultMessage gen default message
+// filterFields 过滤字段并转换字段名风格
+func (m Message) filterFields(ignoreSet map[string]struct{}) []MessageField {
+	curFields := []MessageField{}
+	var filedTag int
+	for _, field := range m.Fields {
+		if isIgnored(ignoreSet, field.Name) {
+			continue
+		}
+		filedTag++
+		newField := MessageField{
+			Typ:     field.Typ,
+			Name:    field.Name,
+			tag:     filedTag,
+			Comment: field.Comment,
+		}
+		newField.Name = stringx.From(newField.Name).ToCamelWithStartLower()
+		if m.Style == fieldStyleToSnake {
+			newField.Name = stringx.From(newField.Name).ToSnake()
+		}
+		if newField.Comment == "" {
+			newField.Comment = newField.Name
+		}
+		curFields = append(curFields, newField)
+	}
+	return curFields
+}
+
+// GenDefaultMessage 生成默认 Message
 func (m Message) GenDefaultMessage(buf *bytes.Buffer) {
-	mOrginName := m.Name
-	mOrginFields := m.Fields
-
-	curFields := []MessageField{}
-	var filedTag int
-	for _, field := range m.Fields {
-		if isInSlice(defaultIgnoreFields, field.Name) {
-			continue
-		}
-		filedTag++
-		field.tag = filedTag
-		field.Name = stringx.From(field.Name).ToCamelWithStartLower()
-		if m.Style == fieldStyleToSnake {
-			field.Name = stringx.From(field.Name).ToSnake()
-		}
-
-		if field.Comment == "" {
-			field.Comment = field.Name
-		}
-		curFields = append(curFields, field)
+	newMsg := Message{
+		Name:    m.Name,
+		Comment: m.Comment,
+		Style:   m.Style,
+		Fields:  m.filterFields(defaultIgnoreFieldsMap),
 	}
-	m.Fields = curFields
-	buf.WriteString(fmt.Sprintf("%s\n", m))
-
-	//reset
-	m.Name = mOrginName
-	m.Fields = mOrginFields
+	buf.WriteString(fmt.Sprintf("%s\n", newMsg))
 }
 
-// GenRpcAddReqRespMessage gen add req message
+// GenRpcAddReqRespMessage 生成 Add 请求和响应 Message
 func (m Message) GenRpcAddReqRespMessage(buf *bytes.Buffer) {
-	mOrginName := m.Name
-	mOrginFields := m.Fields
-
-	//req
-	m.Name = "Add" + mOrginName + "Req"
-	curFields := []MessageField{}
-	var filedTag int
-	for _, field := range m.Fields {
-		if isInSlice(addReqIgnoreFields, field.Name) {
-			continue
-		}
-		filedTag++
-		field.tag = filedTag
-		field.Name = stringx.From(field.Name).ToCamelWithStartLower()
-		if m.Style == fieldStyleToSnake {
-			field.Name = stringx.From(field.Name).ToSnake()
-		}
-		if field.Comment == "" {
-			field.Comment = field.Name
-		}
-		curFields = append(curFields, field)
+	// 请求
+	reqMsg := Message{
+		Name:    m.Name + "AddReq",
+		Comment: m.Comment,
+		Style:   m.Style,
+		Fields:  m.filterFields(addReqIgnoreFieldsMap),
 	}
-	m.Fields = curFields
-	buf.WriteString(fmt.Sprintf("%s\n", m))
+	buf.WriteString(fmt.Sprintf("%s\n", reqMsg))
 
-	//reset
-	m.Name = mOrginName
-	m.Fields = mOrginFields
-
-	//resp
-	m.Name = "Add" + mOrginName + "Resp"
-	m.Fields = []MessageField{}
-	buf.WriteString(fmt.Sprintf("%s\n", m))
-
-	//reset
-	m.Name = mOrginName
-	m.Fields = mOrginFields
-
+	// 响应
+	respMsg := Message{
+		Name:    m.Name + "AddResp",
+		Comment: m.Comment,
+		Style:   m.Style,
+		Fields:  []MessageField{},
+	}
+	buf.WriteString(fmt.Sprintf("%s\n", respMsg))
 }
 
-// GenRpcUpdateReqMessage gen add resp message
+// GenRpcUpdateReqMessage 生成 Update 请求和响应 Message
 func (m Message) GenRpcUpdateReqMessage(buf *bytes.Buffer) {
-	mOrginName := m.Name
-	mOrginFields := m.Fields
-
-	m.Name = "Update" + mOrginName + "Req"
-	curFields := []MessageField{}
-	var filedTag int
-	for _, field := range m.Fields {
-		if isInSlice(updateIgnoreFields, field.Name) {
-			continue
-		}
-		filedTag++
-		field.tag = filedTag
-		field.Name = stringx.From(field.Name).ToCamelWithStartLower()
-		if m.Style == fieldStyleToSnake {
-			field.Name = stringx.From(field.Name).ToSnake()
-		}
-		if field.Comment == "" {
-			field.Comment = field.Name
-		}
-		curFields = append(curFields, field)
+	// 请求
+	reqMsg := Message{
+		Name:    m.Name + "UpdateReq",
+		Comment: m.Comment,
+		Style:   m.Style,
+		Fields:  m.filterFields(updateIgnoreFieldsMap),
 	}
-	m.Fields = curFields
-	buf.WriteString(fmt.Sprintf("%s\n", m))
+	buf.WriteString(fmt.Sprintf("%s\n", reqMsg))
 
-	//reset
-	m.Name = mOrginName
-	m.Fields = mOrginFields
-
-	//resp
-	//firstWord := strings.ToLower(string(m.Name[0]))
-	//name := stringx.From(firstWord + mOrginName[1:]).ToCamelWithStartLower()
-	//comment := stringx.From(firstWord + mOrginName[1:]).ToCamelWithStartLower()
-	//if m.Style == fieldStyleToSnake {
-	//name = stringx.From(firstWord + mOrginName[1:]).ToSnake()
-	//comment = stringx.From(firstWord + mOrginName[1:]).ToSnake()
-	//}
-
-	m.Name = "Update" + mOrginName + "Resp"
-	m.Fields = []MessageField{
-		//{Typ: mOrginName, Name: "data", tag: 1, Comment: comment},
+	// 响应
+	respMsg := Message{
+		Name:    m.Name + "UpdateResp",
+		Comment: m.Comment,
+		Style:   m.Style,
+		Fields:  []MessageField{},
 	}
-	buf.WriteString(fmt.Sprintf("%s\n", m))
-
-	//reset
-	m.Name = mOrginName
-	m.Fields = mOrginFields
+	buf.WriteString(fmt.Sprintf("%s\n", respMsg))
 }
 
-// GenRpcDelReqMessage gen add resp message
+// GenRpcDelReqMessage 生成 Del 请求和响应 Message
 func (m Message) GenRpcDelReqMessage(buf *bytes.Buffer) {
-	mOrginName := m.Name
-	mOrginFields := m.Fields
-
-	m.Name = "Del" + mOrginName + "Req"
-	m.Fields = []MessageField{
-		{Name: "id", Typ: "uint64", tag: 1, Comment: "id"},
+	// 请求
+	reqMsg := Message{
+		Name:    m.Name + "DelReq",
+		Comment: m.Comment,
+		Style:   m.Style,
+		Fields: []MessageField{
+			{Name: "id", Typ: "uint64", tag: 1, Comment: "id"},
+		},
 	}
-	buf.WriteString(fmt.Sprintf("%s\n", m))
+	buf.WriteString(fmt.Sprintf("%s\n", reqMsg))
 
-	//reset
-	m.Name = mOrginName
-	m.Fields = mOrginFields
-
-	//resp
-	m.Name = "Del" + mOrginName + "Resp"
-	m.Fields = []MessageField{}
-	buf.WriteString(fmt.Sprintf("%s\n", m))
-
-	//reset
-	m.Name = mOrginName
-	m.Fields = mOrginFields
+	// 响应
+	respMsg := Message{
+		Name:    m.Name + "DelResp",
+		Comment: m.Comment,
+		Style:   m.Style,
+		Fields:  []MessageField{},
+	}
+	buf.WriteString(fmt.Sprintf("%s\n", respMsg))
 }
 
-// GenRpcGetByIdReqMessage gen add resp message
+// GenRpcGetByIdReqMessage 生成 GetById 请求和响应 Message
 func (m Message) GenRpcGetByIdReqMessage(buf *bytes.Buffer) {
-	mOrginName := m.Name
-	mOrginFields := m.Fields
-
-	m.Name = "Get" + mOrginName + "ByIdReq"
-	m.Fields = []MessageField{
-		{Name: "id", Typ: "uint64", tag: 1, Comment: "id"},
+	// 请求
+	reqMsg := Message{
+		Name:    m.Name + "GetByIdReq",
+		Comment: m.Comment,
+		Style:   m.Style,
+		Fields: []MessageField{
+			{Name: "id", Typ: "uint64", tag: 1, Comment: "id"},
+		},
 	}
-	buf.WriteString(fmt.Sprintf("%s\n", m))
+	buf.WriteString(fmt.Sprintf("%s\n", reqMsg))
 
-	//reset
-	m.Name = mOrginName
-	m.Fields = mOrginFields
-
-	//resp
+	// 响应
 	firstWord := strings.ToLower(string(m.Name[0]))
-	m.Name = "Get" + mOrginName + "ByIdResp"
-
-	//name := stringx.From(firstWord + mOrginName[1:]).ToCamelWithStartLower()
-	comment := stringx.From(firstWord + mOrginName[1:]).ToCamelWithStartLower()
+	comment := stringx.From(firstWord + m.Name[1:]).ToCamelWithStartLower()
 	if m.Style == fieldStyleToSnake {
-		//name = stringx.From(firstWord + mOrginName[1:]).ToSnake()
-		comment = stringx.From(firstWord + mOrginName[1:]).ToSnake()
+		comment = stringx.From(firstWord + m.Name[1:]).ToSnake()
 	}
-	m.Fields = []MessageField{
-		{Typ: mOrginName, Name: "data", tag: 1, Comment: comment},
-		//{Typ: m.Name, Name: "data", tag: 1, Comment: comment},
-	}
-	buf.WriteString(fmt.Sprintf("%s\n", m))
 
-	//reset
-	m.Name = mOrginName
-	m.Fields = mOrginFields
+	respMsg := Message{
+		Name:    m.Name + "GetByIdResp",
+		Comment: m.Comment,
+		Style:   m.Style,
+		Fields: []MessageField{
+			{Typ: m.Name, Name: "data", tag: 1, Comment: comment},
+		},
+	}
+	buf.WriteString(fmt.Sprintf("%s\n", respMsg))
 }
 
-// GenRpcSearchReqMessage gen add resp message
+// GenRpcSearchReqMessage 生成 Search 请求和响应 Message
 func (m Message) GenRpcSearchReqMessage(buf *bytes.Buffer) {
-	mOrginName := m.Name
-	mOrginFields := m.Fields
-
-	m.Name = "Search" + mOrginName + "Req"
+	// 请求，先添加分页字段
 	curFields := []MessageField{
 		{Typ: "uint64", Name: "page", tag: 1, Comment: "page"},
 		{Typ: "uint64", Name: "pageSize", tag: 2, Comment: "pageSize"},
-		{Typ: "string", Name: "OrderField", tag: 3, Comment: "OrderField"},
+		{Typ: "string", Name: "orderField", tag: 3, Comment: "orderField"},
 		{Typ: "bool", Name: "isAsc", tag: 4, Comment: "isAsc"},
 	}
 	var filedTag = len(curFields)
 	for _, field := range m.Fields {
-		if isInSlice(searchIgnoreFields, field.Name) {
+		if isIgnored(searchIgnoreFieldsMap, field.Name) {
 			continue
 		}
 		filedTag++
-		field.tag = filedTag
-
-		field.Name = stringx.From(field.Name).ToCamelWithStartLower()
+		newField := MessageField{
+			Typ:     field.Typ,
+			Name:    field.Name,
+			tag:     filedTag,
+			Comment: field.Comment,
+		}
+		newField.Name = stringx.From(newField.Name).ToCamelWithStartLower()
 		if m.Style == fieldStyleToSnake {
-			field.Name = stringx.From(field.Name).ToSnake()
+			newField.Name = stringx.From(newField.Name).ToSnake()
 		}
-		if field.Comment == "" {
-			field.Comment = field.Name
+		if newField.Comment == "" {
+			newField.Comment = newField.Name
 		}
-		curFields = append(curFields, field)
+		curFields = append(curFields, newField)
 	}
-	m.Fields = curFields
-	buf.WriteString(fmt.Sprintf("%s\n", m))
 
-	//reset
-	m.Name = mOrginName
-	m.Fields = mOrginFields
+	reqMsg := Message{
+		Name:    m.Name + "SearchReq",
+		Comment: m.Comment,
+		Style:   m.Style,
+		Fields:  curFields,
+	}
+	buf.WriteString(fmt.Sprintf("%s\n", reqMsg))
 
-	//resp
+	// 响应
 	firstWord := strings.ToLower(string(m.Name[0]))
-	m.Name = "Search" + mOrginName + "Resp"
-
-	//name := stringx.From(firstWord + mOrginName[1:]).ToCamelWithStartLower()
-	comment := stringx.From(firstWord + mOrginName[1:]).ToCamelWithStartLower()
+	comment := stringx.From(firstWord + m.Name[1:]).ToCamelWithStartLower()
 	if m.Style == fieldStyleToSnake {
-		//name = stringx.From(firstWord + mOrginName[1:]).ToSnake()
-		comment = stringx.From(firstWord + mOrginName[1:]).ToSnake()
+		comment = stringx.From(firstWord + m.Name[1:]).ToSnake()
 	}
 
-	m.Fields = []MessageField{
-		{Typ: "repeated " + mOrginName, Name: "data", tag: 1, Comment: comment},
-		{Typ: "uint64", Name: "total", tag: 2, Comment: "total"},
+	respMsg := Message{
+		Name:    m.Name + "SearchResp",
+		Comment: m.Comment,
+		Style:   m.Style,
+		Fields: []MessageField{
+			{Typ: "repeated " + m.Name, Name: "data", tag: 1, Comment: comment},
+			{Typ: "uint64", Name: "total", tag: 2, Comment: "total"},
+		},
 	}
-	buf.WriteString(fmt.Sprintf("%s\n", m))
-
-	//reset
-	m.Name = mOrginName
-	m.Fields = mOrginFields
+	buf.WriteString(fmt.Sprintf("%s\n", respMsg))
 }
 
-// String returns a string representation of a Message.
+// String 返回 Message 的字符串表示
 func (m Message) String() string {
 	var buf bytes.Buffer
 
@@ -629,7 +596,7 @@ func (m Message) String() string {
 	return buf.String()
 }
 
-// AppendField appends a message field to a message. If the tag of the message field is in use, an error will be returned.
+// AppendField 添加 Message 字段，如果 tag 已存在则返回错误
 func (m *Message) AppendField(mf MessageField) error {
 	for _, f := range m.Fields {
 		if f.Tag() == mf.Tag() {
@@ -642,7 +609,7 @@ func (m *Message) AppendField(mf MessageField) error {
 	return nil
 }
 
-// MessageField represents the field of a message.
+// MessageField Message 字段
 type MessageField struct {
 	Typ     string
 	Name    string
@@ -650,22 +617,22 @@ type MessageField struct {
 	Comment string
 }
 
-// NewMessageField creates a new message field.
+// NewMessageField 创建 Message 字段
 func NewMessageField(typ, name string, tag int, comment string) MessageField {
 	return MessageField{typ, name, tag, comment}
 }
 
-// Tag returns the unique numbered tag of the message field.
+// Tag 返回字段的 tag
 func (f MessageField) Tag() int {
 	return f.tag
 }
 
-// String returns a string representation of a message field.
+// String 返回字段的字符串表示
 func (f MessageField) String() string {
 	return fmt.Sprintf("%s %s = %d", f.Typ, f.Name, f.tag)
 }
 
-// Column represents a database column.
+// Column 数据库列
 type Column struct {
 	Style                  string
 	TableName              string
@@ -680,93 +647,93 @@ type Column struct {
 	ColumnComment          string
 }
 
-// Table represents a database table.
+// Table 数据库表
 type Table struct {
 	TableName  string
 	ColumnName string
 }
 
-// parseColumn parses a column and inserts the relevant fields in the Message. If an enumerated type is encountered, an Enum will
-// be added to the Schema. Returns an error if an incompatible protobuf data type cannot be found for the database column type.
+// MySQL 类型到 protobuf 类型的映射
+var mysqlToProtoType = map[string]string{
+	"char":       "string",
+	"varchar":    "string",
+	"text":       "string",
+	"longtext":   "string",
+	"mediumtext": "string",
+	"tinytext":   "string",
+	"blob":       "bytes",
+	"mediumblob": "bytes",
+	"longblob":   "bytes",
+	"varbinary":  "bytes",
+	"binary":     "bytes",
+	"date":       "int64",
+	"time":       "int64",
+	"datetime":   "int64",
+	"timestamp":  "int64",
+	"bool":       "int64",
+	"bit":        "int64",
+	"float":      "double",
+	"decimal":    "double",
+	"double":     "double",
+	"json":       "string",
+}
+
+// parseColumn 解析列并插入到 Message 中
+// 如果遇到枚举类型，会添加到 Schema 的 Enums 中
+// 如果找不到兼容的 protobuf 类型则返回错误
 func parseColumn(s *Schema, msg *Message, col Column) error {
 	typ := strings.ToLower(col.DataType)
 	var fieldType string
 
+	// 先从映射表查找
+	if pt, ok := mysqlToProtoType[typ]; ok {
+		fieldType = pt
+	}
+
+	// 特殊类型处理
 	switch typ {
-	case "char", "varchar", "text", "longtext", "mediumtext", "tinytext":
-		fieldType = "string"
 	case "enum", "set":
-		// Parse c.ColumnType to get the enum list
 		enumList := regexp.MustCompile(`[enum|set]\((.+?)\)`).FindStringSubmatch(col.ColumnType)
-		//enumList := regexp.MustCompile(`([enum|set])\((.+?)\)`).FindStringSubmatch(col.ColumnType)
 		enums := strings.FieldsFunc(enumList[1], func(c rune) bool {
 			cs := string(c)
-			return "," == cs || "'" == cs
+			return cs == "," || cs == "'"
 		})
 
 		enumName := inflect.Singularize(snaker.SnakeToCamel(col.TableName)) + snaker.SnakeToCamel(col.ColumnName)
 		enum, err := newEnumFromStrings(enumName, col.ColumnComment, enums)
-		if nil != err {
+		if err != nil {
 			return err
 		}
 
 		s.Enums = append(s.Enums, enum)
-
 		fieldType = enumName
-	case "blob", "mediumblob", "longblob", "varbinary", "binary":
-		fieldType = "bytes"
-	case "date", "time", "datetime", "timestamp":
-		//s.AppendImport("google/protobuf/timestamp.proto")
-		fieldType = "int64"
-	case "bool", "bit":
-		//fieldType = "bool"
-		fieldType = "int64" // TODO: bool 类型用 int64 暂时表示
+
 	case "tinyint", "smallint", "int", "mediumint", "bigint":
-		// 在这里增加 tinyint(1) 对应 bool 的处理逻辑
 		fieldType = "int64"
-		// 检查是否为 BIGINT UNSIGNED
+		// BIGINT UNSIGNED 映射为 uint64
 		if typ == "bigint" && strings.Contains(strings.ToLower(col.ColumnType), "unsigned") {
-			fieldType = "uint64" // 修改点1：BIGINT UNSIGNED 映射为 uint64
+			fieldType = "uint64"
 		} else if typ == "tinyint" && strings.Contains(strings.ToLower(col.ColumnType), "(1)") {
-			// 如果是 tinyint(1)，并且类型为 bit 或 bool
-			//fieldType = "bool"
-			fieldType = "int64" // TODO: bool 类型用 int64 暂时表示
-		} else {
+			// tinyint(1) 通常表示 bool，但这里用 int64 表示
 			fieldType = "int64"
 		}
-		//if typ == "tinyint" && strings.Contains(col.ColumnType, "(1)") {
-		//	fieldType = "bool"
-		//} else {
-		//	fieldType = "int64"
-		//}
-	case "float", "decimal", "double":
-		fieldType = "double"
-	case "json":
-		fieldType = "string"
 	}
-	// 在这里增加对 id 字段的特殊处理，将其强制为 uint64
+
+	// id 字段强制为 uint64
 	if strings.ToLower(col.ColumnName) == "id" {
-		fieldType = "uint64" // 修改点2：将 id 字段强制为 uint64
+		fieldType = "uint64"
 	}
-	if "" == fieldType {
+
+	if fieldType == "" {
 		return fmt.Errorf("no compatible protobuf type found for `%s`. column: `%s`.`%s`", col.DataType, col.TableName, col.ColumnName)
 	}
 
 	field := NewMessageField(fieldType, col.ColumnName, len(msg.Fields)+1, col.ColumnComment)
 
 	err := msg.AppendField(field)
-	if nil != err {
+	if err != nil {
 		return err
 	}
 
 	return nil
-}
-
-func isInSlice(slice []string, s string) bool {
-	for i, _ := range slice {
-		if slice[i] == s {
-			return true
-		}
-	}
-	return false
 }

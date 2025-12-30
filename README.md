@@ -60,8 +60,8 @@ git tag -d latest
 git tag  latest   
 git push origin :refs/tags/latest  
 git push origin latest
-git tag v2
-git push origin v2
+git tag v1.8.9
+git push origin v1.8.9
 ```
 
 
